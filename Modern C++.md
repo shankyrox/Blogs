@@ -86,12 +86,6 @@ For solution, see [Question 6](https://www.geeksforgeeks.org/c-plus-plus-gq/cons
   - avoid overloading on integers/numerical types and pointers. 
   - Passing `NULL` to templates deduces type as `int` and not pointer.
 
-### Templates 
-* We can pass non-type arguments to templates. Non-type parameters are mainly used for specifying max or min values or any other constant value for a particular instance of template. The important thing to note about non-type parameters is, they must be const. Compiler must know the value of non-type parameters at compile time. Eg., ```template <class T, int max>
-int arrMin(T arr[], int n)```
-* Non-type parameters are const and should not be modified inside function otherwise compiler error. 
-* 
-
 ### Inheritance 
 * **Important (Overriding vs virtual):** If a function is 'virtual' in the base class, the most-derived class's implementation of the function is called according to the actual type of the object referred to, regardless of the declared type of the pointer or reference. In non-virtual functions, the functions are called according to the type of reference or pointer. Virtual is what leads to runtime polymorphism
   * However in case object slicing occurs, then base class members are called. 
@@ -113,9 +107,28 @@ int arrMin(T arr[], int n)```
 * C++ compiler differentiates between overloaded postfix & prefix operators as postfix have a dummy parameter. 
 * Insert operator '<<' should be overloaded as a global operator. 
 * Overloading operator `new`, `delete` : See [Question 8](https://www.geeksforgeeks.org/c-plus-plus-gq/operator-overloading-gq/). Consider the following statement `Test *ptr = new Test;`. There are actually two things that happen in the above statement--memory allocation and object construction; the new keyword is responsible for both. One step in the process is to call operator new in order to allocate memory; the other step is to actually invoke the constructor. Operator new only allows us to change the memory allocation method, but does not do anything with the constructor calling method. Keyword new is responsible for calling the constructor, not operator new.
-* 
+
+### Templates 
+* We can pass non-type arguments to templates. Non-type parameters are mainly used for specifying max or min values or any other constant value for a particular instance of template. The important thing to note about non-type parameters is, they must be const. Compiler must know the value of non-type parameters at compile time. Eg., ```template <class T, int max>
+int arrMin(T arr[], int n)```
+* Attempting to modify value of non-type arguments of templates gives compiler error as these are const.  
 
 # Type inference
+
+Type inference happen for : (i) Templates, (ii) Auto. Before proceeding, a refresher on how to take arrays as references : 
+
+  * `void fun(int (&arr)[5]); // It is mandatory to give size which is compile time constant.`
+  * If we want to take array of any size as input, use templates : <br>
+  `template<size_t N> void fun(int (&arr)[N]); // Here N is automatically deduced`
+  * To take array of any size, any type as input reference, use : <br>
+  `template<typename T, size_t N> void fun(T (&arr)[N]);`
+  * Alternative : `template<typename T> void fun(T &arr);`. To compute length of array : `sizeof(arr)/sizeof(arr[0])`.
+
+Also a quick referesher on **trailing return types**. In C++11, below two statements are equivalent : 
+```cpp 
+double compute_sq_root(int x);
+auto compute_sq_root(int x) -> double; // hint to compiler about return type. 
+```
 
 ## Template Type Deduction 
 
@@ -124,11 +137,11 @@ template<Type T>
 void fun(ParamType param)
 ```
 
-#### ParamType is reference or a pointer 
+#### 1. ParamType is reference or a pointer 
 
 This is pretty straightforward, no surprises. Predict type for ParamType and accordingly fit T based on qualifiers in ParamType. Rvalues can't be passed here. Type of passed argument becomes ParamType
 
-#### ParamType is universal reference 
+#### 2. ParamType is universal reference 
 
 ```cpp
 tempate<typename Type> 
@@ -152,9 +165,9 @@ double square = compute_square(x); cout << square << endl;
 
 *Answer :* It gives compile error. `Type&&` translates to universal reference and hence `Type` is deduced to `double&`. References must be initialized in the line in which they are declared. Thus, compile error.
 
-#### ParamType is pass by value 
+#### 3. ParamType is pass by value 
 
-*Important thing to remember here is that if ParamType doesn't contain any qualifiers, const and volatile qualifiers are removed as arguments are passed by value and copy of bits take place*. 
+*Important thing to remember here is that if ParamType doesn't contain any qualifiers constness, volatileness, refrenceness are lost.*
 
 * **Question :** What is the type deduced in the below case
 
@@ -193,8 +206,6 @@ func1(arr); func2(arr);
 
 *Answer :* `int *` and `int [5]`. In `func2()` we can use `sizeof` in type T to determine size of array passed. That is how the function to compute size in case of arrays work
 
-<br>
-
 ## Auto type deduction 
 
 Auto type deduction is exactly same as template type deduction barring the case of `std::initializer_list<>`
@@ -216,11 +227,9 @@ auto x = {1, 2, 3};     // std::initializer_list<int>
 
 Passing initializer list in template type deduction will lead to compile error. C++14 allows us to used `auto` in return types and lamdas. Template type deduction is used when `auto` is used as return type in *C++14* or in lambda.
 
-<br>
-
 ## Decltype for type deduction 
 
-`decltype` deduces the exact type of the param without ignoring const-ness or volatile-ness. It can be used `decltype(variable_name)` or `decltype(auto)` (*only in C++14*)
+`decltype` deduces the exact type of the param without ignoring const-ness or volatile-ness. It can be used `decltype(variable_name)` or `decltype(auto)` (*latter only in C++14*)
 
 ```cpp
 // Sample use 
@@ -302,23 +311,63 @@ double temp = c;
 
 <br>
 
-# Initializer_list and Uniform Initialization
+# Initialization
 
-*Not so important section. Hardly will be using initializer_list* 
+### Default initialization 
+Default initialization occurs in compiler generated default constructors and in functions. It leaves primitive types indeterminate and calls default constructor for composite types. Eg : 
 
-**What is `std::initializer_list` ?**
+```cpp 
+void default_initialization() {
+    int i;          // indeterminate
+    std::mutex m;   // default constructor
+    widget w;       // default constructor
+    int a[9];       // indeterminate
+}
+``` 
 
-`std::initializer_list<T>()` is nothing but a list of values of type `T`. It defines a constructor and member functions `begin()` and `end()` for iteration
+### Aggregate initialization 
+Aggregate initialization simply refers to initializing arrays using a list : `int a[3] = {1, 2, 3};` or `int a[3] = {}`. We can similarly initialize class/structs as well. 
 
-Uniform initialization prevents implicit narrowing conversion between implicit converting types such as `int`, `double`, etc. It also solves C++ most vexing parse. However,uniform/braced initialization has very strong affinity towards constructor overloaded with `std::initializer_list<>`. It calls other constructor only when types are not convertible.
+### Value initialization
+Value initialization refers to initializing values with default/0. One way is to do this manually : 
+```cpp 
+void manual_value_initialization() {
+    int i=0;
+    std::mutex m;
+    Widget w = {};
+    int a[9] = {};
+}
+```
 
-C++ most vexing parse : 
+Here value is initialized depending on the type. But we can't use this syntax in case of function templates as we are not sure whether type is primitive or composite. Also keep in mind C++ most vexing parse : 
+
 ```cpp
 Widget wx(10);  // constructor call with arguments
 Widget wx();    // function definition
 Widget wx({10}); // constructor call
 Widget wx({});  // default constructor call
 ```
+
+Before C++11, we can perform value initialization of a class instance by using : `A a = A()` or `A* a = new A()`. This syntax invokes default constructor if user-defined default constructor is present. In case, it is not present, it does not invoke compiler generate default constructor. Rather, it performs value initialization.
+
+### Uniform initialization 
+
+C++11 introduces uniform initialization which provides a uniform syntax for value initialization : 
+
+```cpp 
+void cpp11_value_initialization() {
+    int i {};
+    std::mutex m {};
+    Widget w {};
+    int a[9] {};
+}
+```
+
+This can be easily used with function templates as well. Uniform initialization prevents implicit narrowing conversion between implicit converting types such as `int`, `double`, etc. However,uniform/braced initialization has very strong affinity towards constructor overloaded with `std::initializer_list<>`. It calls other constructor only when types are not convertible.
+
+**What is `std::initializer_list` ?**
+
+`std::initializer_list<T>()` is nothing but a list of values of type `T`. It defines a constructor and member functions `begin()` and `end()` for iteration
 
 ## using keyword vs typedef
 
@@ -723,3 +772,9 @@ In general, a typical string class allocates the storage for the string’s text
 * Like Java, C++ library has a standard exception class which is base class - `std::exception` for all standard exceptions. All objects thrown by components of the standard library are derived from this class. Therefore, all standard exceptions can be caught by catching this type. 
 * Specifying uncaught exceptions by a function : void fun(int *ptr, int x) throw (int *, int)
 * When an exception is thrown, all objects created inside the enclosing try block are destructed before the control is transferred to catch block. Order of destruction is reverse of the order of construction. Any object which raised an unhandled exception in constructor is not destroyed. 
+
+
+# References 
+
+* [Value initialization with C++](https://akrzemi1.wordpress.com/2013/09/10/value-initialization-with-c/)
+* 
