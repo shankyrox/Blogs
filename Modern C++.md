@@ -1,14 +1,16 @@
 # Questions
 
-**Overridden vs virtual function call** 
-Polymorphism means ability of different member function to be called depending on type of invoking object. But if virtual is not used, it will always call to member function for which object was defined and not what it points to.
+* **What is `mutable` keyword used for ?** <br/> 
+Members which are declared as mutable can be changed inside const functions/by const objects.
 
-**mutable keyword** 
-Members which are declared as mutable can be changed inside const functions/const objects.
-
-**Base class reference pointing to derived class**
-
-Binding is done only once at initialization, which can't be changed again otherwise formation of devil class.
+* **Derived class object assigned to Base class reference** <br/>
+Unlike pointers, binding is done only once at initialization, which can't be changed again. Say we do this : 
+```cpp
+Base b1(10);
+Derived d(20, 30);
+Base &b = d;    // base class reference bound to derived class 
+b = b1;         // contains parts of b1 & remaining parts of d; Devil class
+```
 
 * **What is object slicing? When does it occur?** <br/>
 Assign ( = operator) a derived class object to a base class. Only base class members information is kept. 
@@ -19,7 +21,7 @@ Gives compile time error, if we are overriding a non-virtual method of base clas
 * **Deleting a nullptr/NULL. Is it safe/recommended ?** <br/>
 `delete` operator anyways checks for NULL, so any null check before delete is redundant. Also, its okay not setting the pointer to NULL after delete. A program that is correct does not delete a pointer twice, and a program that does delete a pointer twice should crash. Also, no need if pointer is going out of scope. Set it to NULL for complicated lifecycles. 
 
-* Consider the below code. Does it work as expected & why?
+* **Consider the below code. Does it work as expected & why/why not?** <br/>
 ```cpp
 class A{
     std::string name;
@@ -31,12 +33,46 @@ class A{
 A a("Shashank");
 A a = "Shashank";
 ```
-First one compiles - one implicit conversion from const char* to string
-Second doesn't - two implicit conversions. From const char* to string and then copy constructor overload called. 
+First one compiles - one implicit conversion from const char* to string. <br/>
+Second doesn't - two implicit conversions. From const char* to string and then copy constructor overload called. *Two implicit conversions are not allowed.*
+
+* **What is copy elision?** <br/>
+Consider this code : `std::string s = "hi";` is equivalent to `std::string s = std::string("h1")` but most modern compilers will optimize it to avoid an extra copy from temp to `s`. Thus, code is interpreted as `std::string s("hi");`. But, two implicit conversions are not allowed. Thus, code in previous example doesn't compile
+
+* **How to have a class which can be only be created by using `new` operator and compile error on creating instance directly ?**
+By making Destructor private.
+
+* **What is the size of an empty class ?**
+An empty class has size of 1 byte to make sure that two different objects don't point to same memory address. However, if a class derives from empty base class compiler is free to make optimization that base class size is zero. 
+
+* **What is the output of the following program/compiler error ?** 
+```cpp
+#include<iostream>
+using namespace std;
+ 
+class X 
+{
+public:
+    int x;
+};
+ 
+int main()
+{
+    X a = {10};
+    X b = a;
+    cout << a.x << " " << b.x;
+    return 0;
+}
+```
+For solution, see [Question 6](https://www.geeksforgeeks.org/c-plus-plus-gq/constructors-gq/). Works for multiple types in list, but should not be virtual otherwise first 4 bytes are vtable.
+
+
 
 # Key points
 
-- Static members of a class must be initialized. Initialization is done outside the class 
+- Static members of a class must be initialized. Initialization is done outside the class. 
+- Static member variables do not contribute in sizeof(class). They are present in data sections.
+- Static methods can't access class's non-static members/methods. But if they get access to class ptr, then they can access, even private members.  
 - private static member of a class can be used to launch a single instance at app launch. Especially useful for observer pattern, registering in constructor. 
 - **Avoid bare pointers. Also do not mix match**
 - A functions accepts arguments and wants to return a big object, eg matrix. Return options : 
@@ -46,8 +82,38 @@ Second doesn't - two implicit conversions. From const char* to string and then c
     - **By move constructor** (best) 
 - Never throw while holding a resource not held by anyone else 
 - C++14 : **requires** for templates to ensure we get what we expect & better error messages 
-- **`nullptr` is of type `std::nullptr_t` which implicitly converts to bool and any pointer. Use `nullptr` instead of `NULL`. Otherwise, avoid overloading on integers/numerical types and pointers. Passing `NULL` to templates deduces type as `int` and not pointer.**
+- `nullptr` is of type `std::nullptr_t` which implicitly converts to bool and any pointer. Use `nullptr` instead of `NULL`. Otherwise, 
+  - avoid overloading on integers/numerical types and pointers. 
+  - Passing `NULL` to templates deduces type as `int` and not pointer.
 
+### Templates 
+* We can pass non-type arguments to templates. Non-type parameters are mainly used for specifying max or min values or any other constant value for a particular instance of template. The important thing to note about non-type parameters is, they must be const. Compiler must know the value of non-type parameters at compile time. Eg., ```template <class T, int max>
+int arrMin(T arr[], int n)```
+* Non-type parameters are const and should not be modified inside function otherwise compiler error. 
+* 
+
+### Inheritance 
+* **Important (Overriding vs virtual):** If a function is 'virtual' in the base class, the most-derived class's implementation of the function is called according to the actual type of the object referred to, regardless of the declared type of the pointer or reference. In non-virtual functions, the functions are called according to the type of reference or pointer. Virtual is what leads to runtime polymorphism
+  * However in case object slicing occurs, then base class members are called. 
+* *Pure Virtual functions can also have a body:* See - https://stackoverflow.com/questions/5481941/c-pure-virtual-function-have-body. Classes with pure virtual functions can't be instantiated but these can be called from derived class using fully-qualified names.
+* There is nothing like Virtual Constructor. Making constructors virtual doesn't make sense as constructor is responsible for creating an object and it can’t be delegated to any other object by virtual keyword means.
+* A destructor can be virtual. We may want to call appropriate destructor when a base class pointer points to a derived class object and we delete the object. If destructor is not virtual, then only the base class destructor may be called.
+* **Important :** When a class has a virtual function, functions with same signature in all descendant classes automatically become virtual. We don't need to use virtual keyword in declaration explicitly. They are anyways virtual. Refer to this [Question 13](https://www.geeksforgeeks.org/c-plus-plus-gq/virtual-functions-gq/)
+* Using virtual keyword while inheriting : `class Derived : virtual public Base1, virtual public Base2` solves diamond problem. Optimizes space. See [Question 3's](https://www.geeksforgeeks.org/c-plus-plus-gq/inheritance-gq/) explanation. 
+* If a derived class writes its own method, then all functions of base class with same name become hidden, even if signaures of base class functions are different. See [Question 8](https://www.geeksforgeeks.org/c-plus-plus-gq/inheritance-gq/)
+* 
+
+### Final keyword - post C++11 
+* `final` is not exactly a keyword. It holds meaning in 2 specific contexts otherwise can be used as a normal keyword. 
+* `final` in front of `virtual` methods prevent them from being overridden further by child/derived classes. 
+* `final` in front of class as in `class Test final {}` prevent the class/struct from being inherited. 
+
+
+### Operator overloading 
+* C++ compiler differentiates between overloaded postfix & prefix operators as postfix have a dummy parameter. 
+* Insert operator '<<' should be overloaded as a global operator. 
+* Overloading operator `new`, `delete` : See [Question 8](https://www.geeksforgeeks.org/c-plus-plus-gq/operator-overloading-gq/). Consider the following statement `Test *ptr = new Test;`. There are actually two things that happen in the above statement--memory allocation and object construction; the new keyword is responsible for both. One step in the process is to call operator new in order to allocate memory; the other step is to actually invoke the constructor. Operator new only allows us to change the memory allocation method, but does not do anything with the constructor calling method. Keyword new is responsible for calling the constructor, not operator new.
+* 
 
 # Type inference
 
@@ -648,3 +714,12 @@ In general, a typical string class allocates the storage for the string’s text
 ## Questions for stackoverflow 
 
 * Questions regarding rule of 3 & rule of 5 in c++
+
+## Exception Handling 
+
+* There is a special catch block called 'catch all' catch(…) that can be used to catch all types of exceptions. However, 'catch all' block should be the last catch block otherwise compiler error. 
+* Implicit type conversion doesn't happen for primitive types in catch block 
+* Derived class exceptions can be caught by Base class object. Hence, a derived class exception should be caught before a base class exception.
+* Like Java, C++ library has a standard exception class which is base class - `std::exception` for all standard exceptions. All objects thrown by components of the standard library are derived from this class. Therefore, all standard exceptions can be caught by catching this type. 
+* Specifying uncaught exceptions by a function : void fun(int *ptr, int x) throw (int *, int)
+* When an exception is thrown, all objects created inside the enclosing try block are destructed before the control is transferred to catch block. Order of destruction is reverse of the order of construction. Any object which raised an unhandled exception in constructor is not destroyed. 
