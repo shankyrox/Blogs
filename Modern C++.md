@@ -36,7 +36,7 @@ A a = "Shashank";
 First one compiles - one implicit conversion from const char* to string. <br/>
 Second doesn't - two implicit conversions. From const char* to string and then copy constructor overload called. *Two implicit conversions are not allowed.*
 
-* **What is copy elision?** <br/>
+* **What is copy elision or copy initialization?** <br/>
 Consider this code : `std::string s = "hi";` is equivalent to `std::string s = std::string("h1")` but most modern compilers will optimize it to avoid an extra copy from temp to `s`. Thus, code is interpreted as `std::string s("hi");`. But, two implicit conversions are not allowed. Thus, code in previous example doesn't compile
 
 * **How to have a class which can be only be created by using `new` operator and compile error on creating instance directly ?**
@@ -605,6 +605,40 @@ person& operator=(const person& that)
 
 For resources which can't be copied (such as mutexes, file handles), copy constructor, copy assignment operator overload should be deleted (or declared private - privates can still be accessed inside the class). 
 
+#### Rule of 3 implementation from cppreference
+
+```cpp
+class rule_of_three
+{
+    char* cstring; // raw pointer used as a handle to a dynamically-allocated memory block
+    rule_of_three(const char* s, std::size_t n) // to avoid counting twice
+    : cstring(new char[n]) // allocate
+    {
+        std::memcpy(cstring, s, n); // populate
+    }
+ public:
+    rule_of_three(const char* s = "")
+    : cstring(s, std::strlen(s) + 1)
+    {}
+    ~rule_of_three()
+    {
+        delete[] cstring;  // deallocate
+    }
+    rule_of_three(const rule_of_three& other) // copy constructor
+    : rule_of_three(other.cstring)
+    {}
+    rule_of_three& operator=(rule_of_three other) // copy assignment
+    {
+        std::size_t n{std::strlen(other.cstring) + 1};
+        auto new_cstring = new char[n]; // allocate
+        delete[] cstring;  // deallocate
+        cstring = new_cstring;
+        std::memcpy(cstring, other.cstring, n); // populate
+        return *this;
+    }
+};
+```
+
 #### Copy-and-swap idiom
 
 *Info:* `std::swap` is a library function which exchanges the values of two objects.
@@ -650,39 +684,17 @@ dumb_array& operator=(const dumb_array& other)
 }
 ```
 
-#### Rule of 3 implementation from cppreference (Implicit definition)
-
+We can further optimize by making the temp copy in parameter itself : 
 ```cpp
-class rule_of_three
-{
-    char* cstring; // raw pointer used as a handle to a dynamically-allocated memory block
-    rule_of_three(const char* s, std::size_t n) // to avoid counting twice
-    : cstring(new char[n]) // allocate
-    {
-        std::memcpy(cstring, s, n); // populate
-    }
- public:
-    rule_of_three(const char* s = "")
-    : cstring(s, std::strlen(s) + 1)
-    {}
-    ~rule_of_three()
-    {
-        delete[] cstring;  // deallocate
-    }
-    rule_of_three(const rule_of_three& other) // copy constructor
-    : rule_of_three(other.cstring)
-    {}
-    rule_of_three& operator=(rule_of_three other) // copy assignment
-    {
-        std::swap(cstring, other.cstring);
-        return *this;
-    }
-};
+dumb_array& operator=(dumb_array other) {
+    swap(*this, other);
+    return *this;
+}
 ```
 
 ## Rule of 5
 
-#### Implicit definition from cppreference
+#### Definition from cppreference
 
 ```cpp
 class rule_of_five
@@ -725,36 +737,46 @@ class rule_of_five
 };
 ```
 
-## Copy Initialization
+Based on copy and swap idiom above, assuming we have a friend swap function which does nothing more than a member by member swap of all members. Then we can rewrite our constructors/assignment operators overload as : 
 
 ```cpp
-class Sample{
-    int x;
-    public:
-    Sample(int x):x(x){}
+class rule_of_five {
+    //...
+    rule_of_five(const rule_of_five& other) : rule_of_five(other.cstring) {}    // copy ctor
+
+    rule_of_five(rule_of_five&& other): rule_of_five() {                        // move ctor
+        swap(*this, other);
+    }
+
+    rule_of_five& operator=(const rule_of_five& other) {                        // copy assignment operator
+        rule_of_five temp(other);
+        swap(*this, temp);
+        return *this;
+    }
+
+    rule_of_five& operator=(rule_of_five&& other) {                             // move assignment operator
+        swap(*this, other);
+        return *this;
+    }
+
+    // Alternatively and better yet common definition for operator overloads
+    rule_of_five& operator=(rule_of_five other) {
+        swap(*this, other);
+        return *this;
+    }
 }
-
-Sample s = 5;
-
-// This fails - Why ? 
-class CustomString{
-    std::string s;
-public:
-    CustomString(std::string s): s(s) {}
-}
-
-CustomString cstr = "Shashank"; 
 ```
 
 * Perfect forwarding constructor, std::enable_if, std::enable_if_t, std::is_same, std::is_same_v, std::is_convertible, std::is_convertible_v
 
 ## Short String Optimizations (SSO)
 
-In general, a typical string class allocates the storage for the string’s text dynamically from the heap, using new[]. New (which in turn calls malloc) are expensive. Thus, the std::string class, will reserve a small chunk of memory, a “small buffer” embedded inside std::string objects, and when strings are small enough, they will be kept (deep-copied) in that buffer, without triggering dynamic memory allocations.
+In general, a typical string class allocates the storage for the string’s text dynamically from the heap, using new[]. New (which in turn calls malloc) are expensive. Thus, the std::string class, will reserve a small chunk of memory, a “small buffer” (typically 15 characters) embedded inside std::string objects, and when strings are small enough, they will be kept (deep-copied) in that buffer, without triggering dynamic memory allocations.
 
 ## C++11 vs C++14 
 
-* C+11 can't have type deduction in return type. C++14 uses `decltype(auto)`
+* C+11 can't have type deduction in return type. If return is `auto`, there must a trailing return type. C++14 can use `auto`. 
+* C+11 can use `decltype(x)` or `decltype(type_name)` but not `decltype(auto)`, which is introduced in C++14.
 
 ## Return Value Optimization 
 
@@ -762,7 +784,7 @@ In general, a typical string class allocates the storage for the string’s text
 
 ## Questions for stackoverflow 
 
-* Questions regarding rule of 3 & rule of 5 in c++
+<to be added if any>
 
 ## Exception Handling 
 
@@ -777,4 +799,4 @@ In general, a typical string class allocates the storage for the string’s text
 # References 
 
 * [Value initialization with C++](https://akrzemi1.wordpress.com/2013/09/10/value-initialization-with-c/)
-* 
+* [Copy and swap idiom in detail](https://stackoverflow.com/questions/3279543/what-is-the-copy-and-swap-idiom)
