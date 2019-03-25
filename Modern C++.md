@@ -102,6 +102,9 @@ For solution, see [Question 6](https://www.geeksforgeeks.org/c-plus-plus-gq/cons
 * `final` in front of `virtual` methods prevent them from being overridden further by child/derived classes. 
 * `final` in front of class as in `class Test final {}` prevent the class/struct from being inherited. 
 
+### Short String Optimizations (SSO)
+
+In general, a typical string class allocates the storage for the string’s text dynamically from the heap, using new[]. New (which in turn calls malloc) are expensive. Thus, the std::string class, will reserve a small chunk of memory, a “small buffer” (typically 15 characters) embedded inside std::string objects, and when strings are small enough, they will be kept (deep-copied) in that buffer, without triggering dynamic memory allocations.
 
 ### Operator overloading 
 * C++ compiler differentiates between overloaded postfix & prefix operators as postfix have a dummy parameter. 
@@ -376,7 +379,7 @@ This can be easily used with function templates as well. Uniform initialization 
 
 ## std::move
 
-Move operator casts a value to its rvalue.
+Move operator casts its parameter to rvalue at compile time.
 
 #### C++11 implementation
 
@@ -425,6 +428,36 @@ T&& forward(remove_reference_t<T>& param) {
     return static_cast<T&&>(param);
 }
 ```
+
+From C++11's standards, below is the implementation: 
+
+```cpp
+/**
+  *  @brief  Forward an lvalue.
+  *  @return The parameter cast to the specified type.
+  *
+  *  This function is used to implement "perfect forwarding".
+  */
+template<typename _Tp>
+  constexpr _Tp&&
+  forward(typename std::remove_reference<_Tp>::type& __t) noexcept
+  { return static_cast<_Tp&&>(__t); }
+/**
+ *  @brief  Forward an rvalue.
+ *  @return The parameter cast to the specified type.
+ *
+ *  This function is used to implement "perfect forwarding".
+ */
+template<typename _Tp>
+  constexpr _Tp&&
+  forward(typename std::remove_reference<_Tp>::type&& __t) noexcept
+  {
+    static_assert(!std::is_lvalue_reference<_Tp>::value, "template argument"
+                  " substituting _Tp is an lvalue reference type");
+    return static_cast<_Tp&&>(__t);
+  }
+```
+
 Todo : parameter pack 
 
 ## Perfect Forwarding constructor
@@ -767,16 +800,46 @@ class rule_of_five {
 }
 ```
 
+Most of the times, move functions are not generated, whereas copy ones are always generated though deprecated unless move functions are user-defined. Refer : [Special Member function generation rules](https://mariusbancila.ro/blog/2018/07/26/cpp-special-member-function-rules/)
+
+Look at definitions of following : 
+* `std::swap`
+* `std::remove_reference`
+* `std::exchange`
+* 
 * Perfect forwarding constructor, std::enable_if, std::enable_if_t, std::is_same, std::is_same_v, std::is_convertible, std::is_convertible_v
 
-## Short String Optimizations (SSO)
+# Smart Pointers
 
-In general, a typical string class allocates the storage for the string’s text dynamically from the heap, using new[]. New (which in turn calls malloc) are expensive. Thus, the std::string class, will reserve a small chunk of memory, a “small buffer” (typically 15 characters) embedded inside std::string objects, and when strings are small enough, they will be kept (deep-copied) in that buffer, without triggering dynamic memory allocations.
+There are 3 : (i) `std::shared_ptr<T>` (ii) `std::unique_ptr<T>` (iii) `std::weak_ptr<T>`
 
-## C++11 vs C++14 
+### Pimpl Idiom 
+Pimpl = Private implementation. In basic form the pattern looks like : 
+* Move all private members to a `PImpl` class. 
+* `PImpl` class only forward declared in header. Definition in cpp file
+* Allows implementation details to change without recompiling client code. 
+* `const unique_ptr<T>` well suited for this.
 
-* C+11 can't have type deduction in return type. If return is `auto`, there must a trailing return type. C++14 can use `auto`. 
-* C+11 can use `decltype(x)` or `decltype(type_name)` but not `decltype(auto)`, which is introduced in C++14.
+### Two categories of cycles 
+* Layering is a good software engineering practice where a higher level layer calls a lower level layer. Don't violated layering by owning upward. 
+* Don't store a strong owner in a callback. As callback function might never be called. This is how languages like Java/C# with garbage collector leak. Sample code for this is below : 
+```cpp
+void bad(const std::shared_ptr<T>& x) {
+    obj.on_draw([=]{x->extra_work();});
+}
+
+void good(const std::shared_ptr<X>& x) {
+    obj.on_draw([w = weak_ptr<X>(x)] {
+        if(auto x = w.lock()) x->extra_work();
+    });
+}
+```
+
+# C++11 vs C++14 
+
+* C++11 can't have type deduction in return type. If return is `auto`, there must a trailing return type. C++14 can use `auto`. 
+* C++11 can use `decltype(x)` or `decltype(type_name)` but not `decltype(auto)`, which is introduced in C++14.
+* C++11 doesn't have `make_unique`. Introduced in C++14. 
 
 ## Return Value Optimization 
 
@@ -800,3 +863,7 @@ In general, a typical string class allocates the storage for the string’s text
 
 * [Value initialization with C++](https://akrzemi1.wordpress.com/2013/09/10/value-initialization-with-c/)
 * [Copy and swap idiom in detail](https://stackoverflow.com/questions/3279543/what-is-the-copy-and-swap-idiom)
+* [Special member functions generation rules](https://mariusbancila.ro/blog/2018/07/26/cpp-special-member-function-rules/)
+* [libc++ move implementation](https://gcc.gnu.org/onlinedocs/libstdc++/latest-doxygen/a00416_source.html)
+* [Pimpl idiom](https://www.bfilipek.com/2018/01/pimpl.html)
+* [Leak freedom in C++ - Herb Stutter](https://www.youtube.com/watch?v=JfmTagWcqoE)
