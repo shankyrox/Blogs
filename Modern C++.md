@@ -36,9 +36,6 @@ A a = "Shashank";
 First one compiles - one implicit conversion from const char* to string. <br/>
 Second doesn't - two implicit conversions. From const char* to string and then copy constructor overload called. *Two implicit conversions are not allowed.*
 
-* **What is copy elision or copy initialization?** <br/>
-Consider this code : `std::string s = "hi";` is equivalent to `std::string s = std::string("h1")` but most modern compilers will optimize it to avoid an extra copy from temp to `s`. Thus, code is interpreted as `std::string s("hi");`. But, two implicit conversions are not allowed. Thus, code in previous example doesn't compile
-
 * **How to have a class which can be only be created by using `new` operator and compile error on creating instance directly ?**
 By making Destructor private.
 
@@ -115,6 +112,60 @@ In general, a typical string class allocates the storage for the string’s text
 * We can pass non-type arguments to templates. Non-type parameters are mainly used for specifying max or min values or any other constant value for a particular instance of template. The important thing to note about non-type parameters is, they must be const. Compiler must know the value of non-type parameters at compile time. Eg., ```template <class T, int max>
 int arrMin(T arr[], int n)```
 * Attempting to modify value of non-type arguments of templates gives compiler error as these are const.  
+
+### Copy elision
+Copy elision/copy initialization refers to compiler optimizations which avoid copy constructor being called. Consider this code : `std::string s = "hi";` is equivalent to `std::string s = std::string("h1")` but most modern compilers will optimize it to avoid an extra copy from temp to `s`. Thus, code is interpreted as `std::string s("hi");`. However, *two implicit conversions/constructor calls are not allowed.*
+
+**Explicit keyword :** Explicit keyword while declaring constructor can prevent implicit constructor calls as in above. 
+
+[Copy elision](https://stackoverflow.com/questions/12953127/what-are-copy-elision-and-return-value-optimization/12953150#12953150) kicks in the following cases : 
+* **Named return value optimization(NRVO) :** Below is the sample case where neither copy constructor nor move constructor is called. However, until C++17, copy elision is compiler dependent feature. In case, copy elision is not done, move constructor is called. If move is not possible then copy constructor is called. Thus, `return std::move(t);` is very wrong. It generates warning by default. 
+```cpp
+Thing f() {
+  Thing t;
+  return t;
+}
+```
+* **Regular Return Value Optimization(RVO) :** It happens when a temporaray is returned by a function : `Thing t = f();`
+* When a temporaray is passed by value : `g(f())` where signature of g is `void g(Thing t)`;
+* When an exception is thrown and caught by value. 
+
+*These are typical scenarios where move is unnecessary and typically give performance overhead.*
+
+### Exception Handling 
+
+* There is a special catch block called 'catch all' catch(…) that can be used to catch all types of exceptions. However, 'catch all' block should be the last catch block otherwise compiler error. 
+* Implicit type conversion doesn't happen for primitive types in catch block 
+* Derived class exceptions can be caught by Base class object. Hence, a derived class exception should be caught before a base class exception.
+* Like Java, C++ library has a standard exception class which is base class - `std::exception` for all standard exceptions. All objects thrown by components of the standard library are derived from this class. Therefore, all standard exceptions can be caught by catching this type. 
+* Specifying uncaught exceptions by a function : void fun(int *ptr, int x) throw (int *, int)
+* When an exception is thrown, all objects created inside the enclosing try block are destructed before the control is transferred to catch block. Order of destruction is reverse of the order of construction. Any object which raised an unhandled exception in constructor is not destroyed. 
+
+### Constexpr 
+
+`constexpr` in C++ is used to define compile time constants. Only literal type variables can be defined `constexpr` and their value must be available at compile time. Functions return type can be `constexpr` which determine that its value maybe available at compile time if it is passed compile time constants. Eg : 
+
+```cpp
+constexpr int product(int x, int y) 
+{ 
+    return (x * y); 
+} 
+  
+const int x = product(10,20);
+```
+
+Following conditions must be satisfied : 
+* In C++ 11, a constexpr function should contain only one return statement. C++ 14 allows more than one statements.
+* constexpr function should refer only constant global variables.
+* constexpr function can call only other constexpr function not simple function.
+* Function should not be of void type and some operator like prefix increment (++v) are not allowed in constexpr function.
+
+### Vptr & VTable 
+If a base class contains any method which is virtual, then implicitly a pointer - **__vptr** is added at the start of the class. This pointer points to a table/constant array of function pointers. 
+
+__vptr is inherited by all Derived classes. This pointer points to Vtable corresponding to the Derived class. Function pointers point to most derived virtual function
+
+*Note* that __vptr is added only to base class. This pointer is not inherited by derived classes, so compute size accordingly.
 
 # Type inference
 
@@ -813,6 +864,8 @@ Look at definitions of following :
 
 There are 3 : (i) `std::shared_ptr<T>` (ii) `std::unique_ptr<T>` (iii) `std::weak_ptr<T>`
 
+Sample smart pointer implementation C++ is : [Smart pointer implementation in C++ - sample](https://www.codeproject.com/Articles/15351/Implementing-a-simple-smart-pointer-in-c)
+
 ### Pimpl Idiom 
 Pimpl = Private implementation. In basic form the pattern looks like : 
 * Move all private members to a `PImpl` class. 
@@ -835,28 +888,30 @@ void good(const std::shared_ptr<X>& x) {
 }
 ```
 
+# Pragma directives 
+
+* `#pragma once` If `#pragma once` is seen when scanning a header file, that file will never be read again, no matter what. It is a less-portable alternative to using ‘#ifndef’ to guard the contents of header files against multiple inclusions.
+
+* `__attribute__(packed))`, `#pragma pack(n)`, `__packed` : Directive that structure has the smallest possible/ smallest possible n alignment. Eg : 
+```cpp
+typedef __packed struct {
+    char c;
+    int x;
+} X; // 5 bytes
+```
+
+* `#pragma start <funcname>`, `#pragma exit <funcname>` : Functions to be called before and after main. 
+* `__declspec (attributes)` : To give hints to the compiler such as `__declspec(noreturn)`
+* `__declspec (export)` : When building your DLL, you typically create a header file that contains the function prototypes and/or classes you are exporting and add `__declspec(dllexport)` to the declarations in the header file.
+
 # C++11 vs C++14 
 
 * C++11 can't have type deduction in return type. If return is `auto`, there must a trailing return type. C++14 can use `auto`. 
 * C++11 can use `decltype(x)` or `decltype(type_name)` but not `decltype(auto)`, which is introduced in C++14.
 * C++11 doesn't have `make_unique`. Introduced in C++14. 
 
-## Return Value Optimization 
 
 ## Operator overloading 
-
-## Questions for stackoverflow 
-
-<to be added if any>
-
-## Exception Handling 
-
-* There is a special catch block called 'catch all' catch(…) that can be used to catch all types of exceptions. However, 'catch all' block should be the last catch block otherwise compiler error. 
-* Implicit type conversion doesn't happen for primitive types in catch block 
-* Derived class exceptions can be caught by Base class object. Hence, a derived class exception should be caught before a base class exception.
-* Like Java, C++ library has a standard exception class which is base class - `std::exception` for all standard exceptions. All objects thrown by components of the standard library are derived from this class. Therefore, all standard exceptions can be caught by catching this type. 
-* Specifying uncaught exceptions by a function : void fun(int *ptr, int x) throw (int *, int)
-* When an exception is thrown, all objects created inside the enclosing try block are destructed before the control is transferred to catch block. Order of destruction is reverse of the order of construction. Any object which raised an unhandled exception in constructor is not destroyed. 
 
 
 # References 
@@ -867,3 +922,7 @@ void good(const std::shared_ptr<X>& x) {
 * [libc++ move implementation](https://gcc.gnu.org/onlinedocs/libstdc++/latest-doxygen/a00416_source.html)
 * [Pimpl idiom](https://www.bfilipek.com/2018/01/pimpl.html)
 * [Leak freedom in C++ - Herb Stutter](https://www.youtube.com/watch?v=JfmTagWcqoE)
+* [Smart pointer implementation in C++ - sample](https://www.codeproject.com/Articles/15351/Implementing-a-simple-smart-pointer-in-c)
+* [Copy elision - cppreference](https://en.cppreference.com/w/cpp/language/copy_elision)
+* [Copy elision & RVO explanation - Stackoverflow](https://stackoverflow.com/questions/12953127/what-are-copy-elision-and-return-value-optimization/12953150#12953150)
+* [Move & Rvalues explanation - Stackoverflow](https://stackoverflow.com/questions/12953127/what-are-copy-elision-and-return-value-optimization/12953150#12953150)
