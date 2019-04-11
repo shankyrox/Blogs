@@ -252,7 +252,7 @@ template <typename T>
 void func1(T arr[])
 
 template <typename T>
-void func2<T& arr>
+void func2(T& arr)
 
 int arr[] = {1, 2, 3, 4};
 func1(arr); func2(arr);
